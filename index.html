@@ -458,7 +458,7 @@
 <div class="wrapper">
   <header>
     <h1>EchoMood</h1>
-    <p>Voice &amp; Emotion Analyzer · Whisper + Transformers.js</p>
+    <p>Speech Emotion Recognition · DSP + Deep Learning</p>
   </header>
 
   <!-- INPUT CARD -->
@@ -540,19 +540,20 @@
 <!-- Transformers.js from CDN -->
 <script type="module">
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js';
+// Models run fully in-browser via ONNX Runtime (WebAssembly)
 
 env.allowLocalModels = false;
 
 // ── EMOTION META ──────────────────────────────────────────────────
 const EMOTION_META = {
-  joy:      { color: '#FFD166', emoji: '😄' },
-  anger:    { color: '#EF476F', emoji: '😠' },
-  sadness:  { color: '#118AB2', emoji: '😢' },
-  fear:     { color: '#8338EC', emoji: '😨' },
-  surprise: { color: '#06D6A0', emoji: '😲' },
-  disgust:  { color: '#F77F00', emoji: '🤢' },
-  neutral:  { color: '#AAAAAA', emoji: '😐' },
-  love:     { color: '#FF6B9D', emoji: '🥰' },
+  joy:        { color: '#FFD166', emoji: '😄' },
+  anger:      { color: '#EF476F', emoji: '😠' },
+  sadness:    { color: '#118AB2', emoji: '😢' },
+  fear:       { color: '#8338EC', emoji: '😨' },
+  surprise:   { color: '#06D6A0', emoji: '😲' },
+  disgust:    { color: '#F77F00', emoji: '🤢' },
+  excitement: { color: '#FF6B35', emoji: '🤩' },
+  neutral:    { color: '#AAAAAA', emoji: '😐' },
 };
 
 function getMeta(label) {
@@ -718,7 +719,7 @@ window.startAnalysis = async function() {
 
     if (!whisperPipe) {
       await termPrint('> Fetching model weights (first run only)...', 300);
-      whisperPipe = await pipeline('automatic-speech-recognition', 'Xenova/whisper-small.en');
+      whisperPipe = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
       await termPrint('> Whisper loaded ✓', 200);
     } else {
       await termPrint('> Whisper cached ✓', 300);
@@ -759,7 +760,7 @@ window.startAnalysis = async function() {
     loadingLabel.textContent = 'Loading emotion model…';
     await termPrint('> Loading emotion classifier...', 350);
     if (!emotionPipe) {
-      emotionPipe = await pipeline('text-classification', 'Xenova/distilbert-base-uncased-go-emotions-student', { topk: null });
+      emotionPipe = await pipeline('text-classification', 'onnx-community/tanaos-emotion-detection-v1-ONNX', { topk: null });
       await termPrint('> Emotion model loaded ✓', 200);
     } else {
       await termPrint('> Emotion model cached ✓', 200);
