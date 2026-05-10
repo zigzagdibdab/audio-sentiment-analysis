@@ -488,8 +488,8 @@
     <!-- Demo files -->
     <div class="card-title" style="margin-top:1.2rem; margin-bottom:0.6rem;">// Demo Files</div>
     <div class="demo-files" id="demoFiles">
-      <div class="demo-chip" data-file="audio/sad.mp3" onclick="selectDemo(this)">
-        <div class="chip-dot" style="background:var(--joy)"></div> sad.mp3
+      <div class="demo-chip" data-file="audio/happy.mp3" onclick="selectDemo(this)">
+        <div class="chip-dot" style="background:var(--joy)"></div> happy.mp3
       </div>
       <div class="demo-chip" data-file="audio/angry.wav" onclick="selectDemo(this)">
         <div class="chip-dot" style="background:var(--anger)"></div> angry.wav
@@ -718,40 +718,48 @@ window.startAnalysis = async function() {
 
     if (!whisperPipe) {
       await termPrint('> Fetching model weights (first run only)...', 300);
-      whisperPipe = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
+      whisperPipe = await pipeline('automatic-speech-recognition', 'Xenova/whisper-small.en');
       await termPrint('> Whisper loaded ✓', 200);
     } else {
       await termPrint('> Whisper cached ✓', 300);
     }
 
-    // ─ Step 2: Get audio data ─
+    // ─ Step 2: Get audio source ─
     await termPrint('> Reading audio input...', 350);
-    let audioData;
-
     if (isDemoFile) {
-      await termPrint(`> Fetching demo: ${demoFilePath}`, 300);
-      const resp = await fetch(demoFilePath);
-      if (!resp.ok) throw new Error(`Could not fetch demo file (${resp.status}). Make sure audio/ folder exists in your repo.`);
-      const ab = await resp.arrayBuffer();
-      audioData = await decodeToFloat32(ab);
+      await termPrint(`> Using demo: ${demoFilePath}`, 300);
     } else {
-      const ab = await audioBlob.arrayBuffer();
-      audioData = await decodeToFloat32(ab);
+      await termPrint('> Using uploaded/recorded audio', 300);
     }
-    await termPrint('> Audio decoded ✓', 200);
+    await termPrint('> Audio source ready ✓', 200);
 
     // ─ Step 3: Transcribe ─
     loadingLabel.textContent = 'Transcribing…';
     await termPrint('> Running speech recognition...', 350);
-    const result = await whisperPipe(audioData, { language: 'en', task: 'transcribe' });
-    const transcript = result.text.trim();
+    let whisperResult;
+    if (isDemoFile) {
+      // Pass URL directly for demo files
+      whisperResult = await whisperPipe(demoFilePath, {
+        language: 'en', task: 'transcribe',
+        chunk_length_s: 30, stride_length_s: 5,
+      });
+    } else {
+      // For uploaded/recorded blobs, use object URL
+      const blobUrl = URL.createObjectURL(audioBlob);
+      whisperResult = await whisperPipe(blobUrl, {
+        language: 'en', task: 'transcribe',
+        chunk_length_s: 30, stride_length_s: 5,
+      });
+      URL.revokeObjectURL(blobUrl);
+    }
+    const transcript = (whisperResult.text || '').trim();
     await termPrint(`> Transcript: "${transcript.slice(0,50)}${transcript.length>50?'…':''}"`, 200);
 
     // ─ Step 4: Load emotion model ─
     loadingLabel.textContent = 'Loading emotion model…';
     await termPrint('> Loading emotion classifier...', 350);
     if (!emotionPipe) {
-      emotionPipe = await pipeline('text-classification', 'Xenova/distilroberta-base-go-emotions-multi', { topk: null });
+      emotionPipe = await pipeline('text-classification', 'Xenova/distilbert-base-uncased-go-emotions-student', { topk: null });
       await termPrint('> Emotion model loaded ✓', 200);
     } else {
       await termPrint('> Emotion model cached ✓', 200);
@@ -774,15 +782,6 @@ window.startAnalysis = async function() {
     console.error(err);
   }
 };
-
-// ── DECODE AUDIO TO FLOAT32 ───────────────────────────────────────
-async function decodeToFloat32(arrayBuffer) {
-  const ctx = new AudioContext({ sampleRate: 16000 });
-  const decoded = await ctx.decodeAudioData(arrayBuffer);
-  const raw = decoded.getChannelData(0);
-  await ctx.close();
-  return raw;
-}
 
 // ── RENDER RESULTS ────────────────────────────────────────────────
 function renderResults(transcript, rawEmotions) {
